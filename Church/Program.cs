@@ -9,32 +9,19 @@ class Program
 	static void Main()
 	{
 		var time = DateTime.Now;
-		var head = Leaf(2);
-		head.Add(Leaf(1));
-		head[0].Add(Leaf(3));
-		head[0].Add(Leaf(0));
-		head[0].Add(Leaf(2));
-		head[0][0].Add(Leaf(0));
-		head[0][0].Add(Leaf(2));
-		head[0][2].Add(Leaf(4));
-		head[0][2][0].Add(Leaf(1));
-		var ct = head.ToCTree();
-		var h2 = ToTree(ct);
-		WriteLine(h2);
-		/*for (var i = 0; i <= 6; i++) WriteLine($"{i} : {ToInt(fact(ToChurch(i)))}");
-		for (var i = 0; i <= 3; i++) WriteLine($"{i} : {ToInt(nthPrime(ToChurch(i)))}");
-		WriteLine(ToInt(lcm(ToChurch(16))(ToChurch(12))));
-		WriteLine(ToInt(lcm(ToChurch(29))(ToChurch(4))));
-		WriteLine(ToInt(lcm(ToChurch(18))(ToChurch(27))));
-		WriteLine(ToInt(lcm(ToChurch(0))(ToChurch(5))));
-		WriteLine(ToInt(lcm(ToChurch(32))(ToChurch(4))));*/
+		for (var i = 0; i <= 10; i++) WriteLine($"{i} : {ToInt(fact(ToCInt(i)))}");
+		for (var i = 0; i <= 4; i++) WriteLine($"{i} : {ToInt(nthPrime(ToCInt(i)))}");
+		WriteLine(ToInt(lcm(ToCInt(16))(ToCInt(12))));
+		WriteLine(ToInt(lcm(ToCInt(29))(ToCInt(4))));
+		WriteLine(ToInt(lcm(ToCInt(18))(ToCInt(27))));
+		WriteLine(ToInt(lcm(ToCInt(0))(ToCInt(5))));
+		WriteLine(ToInt(lcm(ToCInt(32))(ToCInt(4))));
 		var L = new List<int> { 3, 1, 4, 1, 5, 9 };
-		//var L = new List<int> { 3 };
 		var z = L.Select(ToCInt).ToList().ToCList();
 		var w = ToList(z);
 		WriteLine($"len = {ToInt(len(z))}, sum = {ToInt(sum(z))}, [{string.Join(", ", w.Select(ToInt))}]");
-		WriteLine($"{3} : {ToInt(nthPrime(ToCInt(4)))}");
-		WriteLine($"{3} : {ToInt(nthPrime(ToCInt(4)))}");
+		w = ToList(rev(z));
+		WriteLine($"len = {ToInt(len(z))}, sum = {ToInt(sum(z))}, [{string.Join(", ", w.Select(ToInt))}]");
 		WriteLine((DateTime.Now - time).TotalSeconds);
 	}
 }
@@ -75,7 +62,7 @@ static class Church
 	public static bool ToBool(Fun p) => p(True)(False) == True;
 	public static Fun ToCBool(bool f) => f ? True : False;
 
-	// 自然数
+	// 自然数 (n(f)(x) は x に f を n 回作用させる)
 	// zero = 0
 	public static Fun zero = f => x => x;
 	// one = 1
@@ -121,7 +108,7 @@ static class Church
 		return c;
 	}
 	
-	// タプル
+	// タプル (t=(a,b) なら t(f)=f(a)(b))
 	// pair(a)(b) -> (a, b)
 	public static Fun pair = x => y => z => z(x)(y);
 	// first((a, b)) -> a
@@ -132,21 +119,43 @@ static class Church
 	public static (Fun x, Fun y) ToTuple(Fun a) => (first(a), second(a));
 	public static Fun ToCTuple((Fun x, Fun y) a) => pair(a.x)(a.y);
 
-	// 連結リスト
+	// 連結リスト (l=[a,b,c] なら l(f)(x0)=f(f(f(x0)(a))(b))(c) で, f を 2 引数関数とみなせば l(f)(x0)=f(f(f(x0, a), b), c))
+	// すなわち, x0 を初期値として f で順番に畳み込む
 	// nil -> []
 	public static Fun nil = False;
 	// isnil(L) -> L==[]
 	public static Fun isnil = l => l(K(K(False)))(True);
-	// consl(t)(L) -> [t, L]
-	public static Fun consl = h => t => c => n => t(c)(c(n)(h));
-	// consr(t)(L) -> [L, t]
-	public static Fun consr = h => t => c => n => c(t(c)(n))(h);
+	// consl(t)(L=[a,b,c]) -> [t, a, b, c]
+	public static Fun consl = h => t => f => x0 => t(f)(f(x0)(h));
+	// consr(t)(L=[a,b,c]) -> [a, b, c, t]
+	public static Fun consr = t => h => f => x0 => f(h(f)(x0))(t);
 	// head([]) -> nil
-	// head([t, L]) -> t
+	// head([t, ...]) -> t
 	public static Fun head = l => second(l(x => y => pair(False)(first(x)(y)(second(x))))(pair(True)(nil)));
 	// tail([]) -> nil
-	// tail([t, L]) -> L
+	// tail([t, ...]) -> [...]
 	public static Fun tail = l => second(l(p => x => pair(False)(first(p)(False)(consr(x)(second(p)))))(pair(True)(nil)));
+	// last([]) -> nil
+	// last([..., t]) -> t
+	public static Fun last = l => l(False)(nil);
+	// init([]) -> nil
+	// init([..., t]) -> [...]
+	public static Fun init = l => first(l(x => y => pair(second(x))(consr(y)(second(x))))(pair(nil)(nil)));
+	// rev([a,b,...]) -> [..., b, a]
+	public static Fun rev = l => l(x => y => consl(y)(x))(nil);
+	// uncons(nil) -> nil
+	// uncons([t, ...]) -> (t, ...)
+	public static Fun uncons = l => isnil(l)(l)(pair(head(l))(tail(l)));
+	// map(f)([a,b,c]) -> [f(a),f(b),f(c)]
+	public static Fun map = f => l => g => l(x => y => g(x)(f(y)));
+	// select(f)(L) = [x in L|f(x)] /; f(a) は 真偽値
+	public static Fun select = f => l => g => l(x => y => f(y)(g(x)(y))(x));
+	// concat([a,b])([c,d,e]) -> [a,b,c,d,e]
+	public static Fun concat = l1 => l2 => f => x0 => l2(f)(l1(f)(x0));
+	// join(x)(nil) = []
+	// join(x)([a]) = [a]
+	// join(x)([a,b,c,...]) = [a,x,b,x,c,...]
+	public static Fun join = x => l => f => x0 => second(l(a => b => pair(True)(f(first(a)(f(second(a))(x))(x0))(b)))(pair(False)(x0)));
 	// len(L) -> length of L
 	public static Fun len = l => l(a => succ)(zero);
 	// sum(L) -> sum of L
@@ -216,6 +225,11 @@ static class Church
 	)(pair(n)(m));
 	// lcm(m)(n) = lcm(m, n)
 	public static Fun lcm = n => m => mult(div(n)(gcd(n)(m)))(m);
+
+	// IO
+	public static Fun getch = x => ToCInt(Read());
+	public static Fun puts = x => { Write(ToInt(x)); return x; };
+	//public static Fun readln = x => 
 
 	// 根付き木
 	public static Fun tree = n => ch => pair(n)(ch);
